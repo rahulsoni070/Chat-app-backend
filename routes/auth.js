@@ -2,17 +2,36 @@ const express = require("express");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const { requireAuth } = require("../middleware/auth");
 const router = express.Router();
 
-const JWT_SECRET = process.env.JWT_SECRET;
+const signToken = (user) =>
+  jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "4h" });
+
+const readCredentials = (body) => ({
+  username: typeof body?.username === "string" ? body.username.trim() : "",
+  password: typeof body?.password === "string" ? body.password : "",
+});
 
 router.post("/register", async (req, res) => {
-  const { username, password } = req.body;
+  const { username, password } = readCredentials(req.body);
   try {
     if (!username || !password) {
       return res
         .status(400)
         .json({ message: "Username and password are required." });
+    }
+
+    if (username.length < 3 || username.length > 30) {
+      return res
+        .status(400)
+        .json({ message: "Username must be 3 to 30 characters." });
+    }
+
+    if (password.length < 6) {
+      return res
+        .status(400)
+        .json({ message: "Password must be at least 6 characters." });
     }
 
     const existingUser = await User.findOne({ username });
@@ -28,7 +47,7 @@ router.post("/register", async (req, res) => {
     const user = new User({ username: username, password: hashedPassword });
     await user.save();
 
-    const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: "4h" });
+    const token = signToken(user);
     res
       .status(201)
       .json({ message: "User registered successfully", token, username });
@@ -39,7 +58,7 @@ router.post("/register", async (req, res) => {
 });
 
 router.post("/login", async (req, res) => {
-  const { username, password } = req.body;
+  const { username, password } = readCredentials(req.body);
   try {
     if (!username || !password) {
       return res
@@ -55,7 +74,7 @@ router.post("/login", async (req, res) => {
     if (!isPasswordMatch)
       return res.status(401).json({ message: "Invalid username or password." });
 
-    const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: "4h" });
+    const token = signToken(user);
 
     res.status(200).json({
       message: "Login successful",
@@ -66,6 +85,11 @@ router.post("/login", async (req, res) => {
     console.error(error);
     res.status(500).json({ message: "Server error while login." });
   }
+});
+
+// Lets the client check that a stored token is still valid.
+router.get("/me", requireAuth, (req, res) => {
+  res.json({ username: req.user.username });
 });
 
 module.exports = router;
