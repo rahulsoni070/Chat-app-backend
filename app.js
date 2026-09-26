@@ -11,7 +11,7 @@ const { registerSocketHandlers } = require("./socket");
 // CLIENT_URL may hold a comma-separated list of allowed origins.
 const allowedOrigins = (process.env.CLIENT_URL || "http://localhost:3000")
   .split(",")
-  .map((origin) => origin.trim())
+  .map((origin) => origin.trim().replace(/\/+$/, "")) // "https://x.app/" never matches the browser's Origin
   .filter(Boolean);
 
 function createServer() {
